@@ -17,9 +17,8 @@ services:
     App\Service\Provider\Implementation\Provider1Json:
         tags: ['app.content_provider']
 
-    # Provider 2
-    # App\Service\Provider\Implementation\Provider2Xml:
-    #     tags: ['app.content_provider']
+    App\Service\Provider\Implementation\Provider2Xml:
+        tags: ['app.content_provider']
 
     # NOT: Yeni provider eklemek için:
     # 1. App\Service\Provider\Base\BaseProvider'ı extend eden yeni bir sınıf oluştur

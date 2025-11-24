@@ -8,9 +8,9 @@ use App\Service\Provider\Base\BaseProvider;
 use App\Service\Utility\DurationParser;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
-class Provider1Json extends BaseProvider
+class Provider2Xml extends BaseProvider
 {
-    private const API_URL = 'https://raw.githubusercontent.com/WEG-Technology/mock/refs/heads/main/v2/provider1';
+    private const API_URL = 'https://raw.githubusercontent.com/WEG-Technology/mock/refs/heads/main/v2/provider2';
 
     public function __construct(
         private readonly HttpClientInterface $httpClient,
@@ -33,9 +33,11 @@ class Provider1Json extends BaseProvider
      */
     protected function parse(string $raw): array
     {
-        $decoded = json_decode($raw, true);
+        $xml = simplexml_load_string($raw);
+        $json = json_encode($xml);
+        $decoded = json_decode($json, true);
         
-        return $decoded['contents'] ?? [];
+        return $decoded['items']['item'] ?? [];
     }
 
     /**
@@ -46,11 +48,16 @@ class Provider1Json extends BaseProvider
     {
         $dtos = [];
         
+        // XML'den gelen veri tek bir item olabilir veya array olabilir
+        if (isset($raw['id'])) {
+            $raw = [$raw];
+        }
+        
         foreach ($raw as $item) {
             $dto = new ContentDTO();
             $dto->provider = $this->getName();
             $dto->contentId = $item['id'] ?? '';
-            $dto->title = $item['title'] ?? '';
+            $dto->title = $item['headline'] ?? '';
             
             $typeString = $item['type'] ?? throw new \InvalidArgumentException(
                 sprintf('Content type is required for content ID: %s', $item['id'] ?? 'unknown')
@@ -65,18 +72,26 @@ class Provider1Json extends BaseProvider
                 )
             );
             
-            $metrics = $item['metrics'] ?? [];
-            $dto->views = (int)($metrics['views'] ?? 0);
-            $dto->likes = (int)($metrics['likes'] ?? 0);
-            $dto->reactions = 0;
-            $dto->comments = 0;
+            $stats = $item['stats'] ?? [];
+            $dto->views = (int)($stats['views'] ?? 0);
+            $dto->likes = (int)($stats['likes'] ?? 0);
+            $dto->reactions = (int)($stats['reactions'] ?? 0);
+            $dto->comments = (int)($stats['comments'] ?? 0);
             
-            $duration = $metrics['duration'] ?? '';
+            $duration = $stats['duration'] ?? '';
             $dto->duration = $this->durationParser->parseDuration($duration);
-            $dto->readingTime = $dto->duration;
             
-            $dto->publishedAt = new \DateTime($item['published_at'] ?? 'now');
-            $dto->tags = $item['tags'] ?? [];
+            $readingTime = $stats['reading_time'] ?? '';
+            $dto->readingTime = $this->durationParser->parseDuration($readingTime);
+            
+            $dto->publishedAt = new \DateTime($item['publication_date'] ?? 'now');
+            
+            $categories = $item['categories']['category'] ?? [];
+            if (is_string($categories)) {
+                $dto->tags = [$categories];
+            } else {
+                $dto->tags = $categories;
+            }
             
             $dtos[] = $dto;
         }
@@ -89,7 +104,7 @@ class Provider1Json extends BaseProvider
      */
     public function getName(): string
     {
-        return 'provider_1_json';
+        return 'provider_2_xml';
     }
 }
 
