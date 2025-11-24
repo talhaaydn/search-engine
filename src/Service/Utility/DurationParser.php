@@ -8,10 +8,11 @@ class DurationParser
      * Duration formatını saniye cinsinden süre değerine çevirir
      * 
      * Desteklenen formatlar:
+     * - "M" → Sadece Dakika (örn: "8" → 480 saniye)
      * - "MM:SS" → Dakika:Saniye (örn: "15:30" → 930 saniye)
      * - "HH:MM:SS" → Saat:Dakika:Saniye (örn: "1:22:45" → 4965 saniye)
      * 
-     * @param string|int|null $duration Süre değeri
+     * @param string|null $duration Süre değeri
      * @return int Saniye cinsinden süre
      */
     public function parseDuration(?string $duration): int
@@ -24,7 +25,7 @@ class DurationParser
     }
 
     /**
-     * @param string $duration Time formatında süre (HH:MM:SS veya MM:SS)
+     * @param string $duration Time formatında süre (HH:MM:SS, MM:SS veya M)
      * @return int Saniye cinsinden süre
      */
     private function parseTimeFormat(string $duration): int
@@ -45,6 +46,11 @@ class DurationParser
             $seconds = (int)$parts[1];
             
             $totalSeconds = ($minutes * 60) + $seconds;
+        } elseif (count($parts) === 1) {
+            // Sadece dakika formatı (örn: "8")
+            $minutes = (int)$parts[0];
+            
+            $totalSeconds = $minutes * 60;
         }
 
         return $totalSeconds;
