@@ -4,6 +4,8 @@ namespace App\Service\Provider\Implementation;
 
 use App\DTO\ContentDTO;
 use App\Enum\ContentType;
+use App\Exception\Provider\ProviderNormalizeException;
+use App\Exception\Provider\ProviderParseException;
 use App\Service\Provider\Base\BaseProvider;
 use App\Service\Utility\DurationParser;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
@@ -30,40 +32,91 @@ class Provider1Json extends BaseProvider
     /**
      * @param string $raw
      * @return array
+     * @throws ProviderParseException
      */
     protected function parse(string $raw): array
     {
-        $decoded = json_decode($raw, true);
+        $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
         
-        return $decoded['contents'] ?? [];
+        if (!isset($decoded['contents']) || !is_array($decoded['contents'])) {
+            throw ProviderParseException::create(
+                providerName: $this->getName(),
+                message: 'Invalid response structure: "contents" field missing or not an array',
+                rawData: $raw
+            );
+        }
+        
+        return $decoded['contents'];
     }
 
     /**
      * @param array $raw
      * @return ContentDTO[]
+     * @throws ProviderNormalizeException
      */
     public function normalize(array $raw): array
     {
         $dtos = [];
+        $errors = [];
         
-        foreach ($raw as $item) {
+        foreach ($raw as $index => $item) {
+            try {
+                $dtos[] = $this->normalizeItem($item);
+            } catch (\Throwable $e) {
+                $errors[] = [
+                    'index' => $index,
+                    'content_id' => $item['id'] ?? 'unknown',
+                    'error' => $e->getMessage(),
+                ];
+            }
+        }
+        
+        if (empty($dtos) && !empty($raw)) {
+            throw ProviderNormalizeException::create(
+                providerName: $this->getName(),
+                message: sprintf('Failed to normalize all %d items', count($raw)),
+                invalidData: ['errors' => $errors]
+            );
+        }
+        
+        return $dtos;
+    }
+
+    /**
+     * @param array $item
+     * @return ContentDTO
+     * @throws ProviderNormalizeException
+     */
+    private function normalizeItem(array $item): ContentDTO
+    {        
+        $contentId = $item['id'] ?? null;
+
+        try {
             $dto = new ContentDTO();
             $dto->provider = $this->getName();
-            $dto->contentId = $item['id'] ?? '';
+            
+            if (empty($contentId)) {
+                throw new \InvalidArgumentException('Content ID is required');
+            }
+
+            $dto->contentId = (string)$contentId;
             $dto->title = $item['title'] ?? '';
             
-            $typeString = $item['type'] ?? throw new \InvalidArgumentException(
-                sprintf('Content type is required for content ID: %s', $item['id'] ?? 'unknown')
-            );
+            $typeString = $item['type'] ?? null;
+            if (empty($typeString)) {
+                throw new \InvalidArgumentException('Content type is required');
+            }
             
-            $dto->type = ContentType::tryFrom($typeString) ?? throw new \InvalidArgumentException(
-                sprintf(
-                    'Invalid content type "%s" for content ID: %s. Allowed types: %s',
-                    $typeString,
-                    $item['id'] ?? 'unknown',
-                    implode(', ', array_map(fn($case) => $case->value, ContentType::cases()))
-                )
-            );
+            $dto->type = ContentType::tryFrom($typeString);
+            if ($dto->type === null) {
+                throw new \InvalidArgumentException(
+                    sprintf(
+                        'Invalid content type "%s". Allowed types: %s',
+                        $typeString,
+                        implode(', ', array_map(fn($case) => $case->value, ContentType::cases()))
+                    )
+                );
+            }
             
             $metrics = $item['metrics'] ?? [];
             $dto->views = (int)($metrics['views'] ?? 0);
@@ -75,13 +128,25 @@ class Provider1Json extends BaseProvider
             $dto->duration = $this->durationParser->parseDuration($duration);
             $dto->readingTime = $dto->duration;
             
-            $dto->publishedAt = new \DateTime($item['published_at'] ?? 'now');
+            $publishedAt = $item['published_at'] ?? null;
+            if (empty($publishedAt)) {
+                throw new \InvalidArgumentException('Published at is required');
+            }
+            $dto->publishedAt = new \DateTime($publishedAt);
+            
             $dto->tags = $item['tags'] ?? [];
             
-            $dtos[] = $dto;
+            return $dto;
+            
+        } catch (\Throwable $e) {
+            throw ProviderNormalizeException::create(
+                providerName: $this->getName(),
+                message: sprintf('Failed to normalize item: %s', $e->getMessage()),
+                contentId: $contentId,
+                invalidData: $item,
+                previous: $e
+            );
         }
-        
-        return $dtos;
     }
 
     /**

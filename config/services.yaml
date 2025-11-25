@@ -13,6 +13,7 @@ services:
     App\Service\Provider\Manager\ProviderManager:
         arguments:
             $providers: !tagged_iterator app.content_provider
+            $logger: '@monolog.logger.provider'
 
     App\Service\Provider\Implementation\Provider1Json:
         tags: ['app.content_provider']

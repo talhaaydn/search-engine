@@ -29,20 +29,13 @@ class ImportContentCommand extends Command
     {
         $io = new SymfonyStyle($input, $output);
 
-        try {
-            $io->title('Tüm provider\'lardan içerik import ediliyor...');
-            $contents = $this->providerManager->importAll();
+        $io->title('Tüm provider\'lardan içerik import ediliyor...');
 
-            $io->success(sprintf('Toplam %d içerik başarıyla import edildi!', count($contents)));
+        $contents = $this->providerManager->importAll();
 
-            return Command::SUCCESS;
-        } catch (\RuntimeException $e) {
-            $io->error($e->getMessage());
-            return Command::FAILURE;
-        } catch (\Exception $e) {
-            $io->error('İçerik import edilirken bir hata oluştu: ' . $e->getMessage());
-            return Command::FAILURE;
-        }
+        $io->success(sprintf('%d içerik başarıyla import edildi', count($contents)));
+
+        return Command::SUCCESS;
     }
 }
 

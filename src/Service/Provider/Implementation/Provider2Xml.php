@@ -4,6 +4,8 @@ namespace App\Service\Provider\Implementation;
 
 use App\DTO\ContentDTO;
 use App\Enum\ContentType;
+use App\Exception\Provider\ProviderNormalizeException;
+use App\Exception\Provider\ProviderParseException;
 use App\Service\Provider\Base\BaseProvider;
 use App\Service\Utility\DurationParser;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
@@ -30,47 +32,117 @@ class Provider2Xml extends BaseProvider
     /**
      * @param string $raw
      * @return array
+     * @throws ProviderParseException
      */
     protected function parse(string $raw): array
     {
-        $xml = simplexml_load_string($raw);
-        $json = json_encode($xml);
-        $decoded = json_decode($json, true);
+        libxml_use_internal_errors(true);
         
-        return $decoded['items']['item'] ?? [];
+        $xml = simplexml_load_string($raw);
+        
+        if ($xml === false) {
+            $errors = libxml_get_errors();
+            libxml_clear_errors();
+            
+            $errorMessages = array_map(
+                fn($error) => sprintf('Line %d: %s', $error->line, trim($error->message)),
+                $errors
+            );
+            
+            throw ProviderParseException::create(
+                providerName: $this->getName(),
+                message: sprintf('XML parse error: %s', implode('; ', $errorMessages)),
+                rawData: $raw
+            );
+        }
+        
+        $json = json_encode($xml);
+        $decoded = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        
+        if (!isset($decoded['items']['item']) || !is_array($decoded['items']['item'])) {
+            throw ProviderParseException::create(
+                providerName: $this->getName(),
+                message: 'Invalid XML structure: "items/item" field missing or not an array',
+                rawData: $raw
+            );
+        }
+        
+        return $decoded['items']['item'];
     }
 
     /**
      * @param array $raw
      * @return ContentDTO[]
+     * @throws ProviderNormalizeException
      */
     public function normalize(array $raw): array
     {
-        $dtos = [];
-        
-        // XML'den gelen veri tek bir item olabilir veya array olabilir
         if (isset($raw['id'])) {
             $raw = [$raw];
         }
         
-        foreach ($raw as $item) {
+        $dtos = [];
+        $errors = [];
+        
+        foreach ($raw as $index => $item) {
+            try {
+                $dtos[] = $this->normalizeItem($item);
+            } catch (\Throwable $e) {
+                $errors[] = [
+                    'index' => $index,
+                    'content_id' => $item['id'] ?? 'unknown',
+                    'error' => $e->getMessage(),
+                ];
+            }
+        }
+        
+        if (empty($dtos) && !empty($raw)) {
+            throw ProviderNormalizeException::create(
+                providerName: $this->getName(),
+                message: sprintf('Failed to normalize all %d items', count($raw)),
+                invalidData: ['errors' => $errors]
+            );
+        }
+        
+        return $dtos;
+    }
+
+    /**
+     * @param array $item
+     * @return ContentDTO
+     * @throws ProviderNormalizeException
+     */
+    private function normalizeItem(array $item): ContentDTO
+    {        
+        $contentId = $item['id'] ?? null;
+
+        try {
             $dto = new ContentDTO();
             $dto->provider = $this->getName();
-            $dto->contentId = $item['id'] ?? '';
+            
+            if (empty($contentId)) {
+                throw new \InvalidArgumentException('Content ID is required');
+            }
+
+            $dto->contentId = (string)$contentId;
+            
             $dto->title = $item['headline'] ?? '';
             
-            $typeString = $item['type'] ?? throw new \InvalidArgumentException(
-                sprintf('Content type is required for content ID: %s', $item['id'] ?? 'unknown')
-            );
+            $typeString = $item['type'] ?? null;
+            if (empty($typeString)) {
+                throw new \InvalidArgumentException('Content type is required');
+            }
             
-            $dto->type = ContentType::tryFrom($typeString) ?? throw new \InvalidArgumentException(
-                sprintf(
-                    'Invalid content type "%s" for content ID: %s. Allowed types: %s',
-                    $typeString,
-                    $item['id'] ?? 'unknown',
-                    implode(', ', array_map(fn($case) => $case->value, ContentType::cases()))
-                )
-            );
+            $dto->type = ContentType::tryFrom($typeString);
+            if ($dto->type === null) {
+                throw new \InvalidArgumentException(
+                    sprintf(
+                        'Invalid content type "%s". Allowed types: %s',
+                        $typeString,
+                        implode(', ', array_map(fn($case) => $case->value, ContentType::cases()))
+                    )
+                );
+            }
             
             $stats = $item['stats'] ?? [];
             $dto->views = (int)($stats['views'] ?? 0);
@@ -84,19 +156,30 @@ class Provider2Xml extends BaseProvider
             $readingTime = $stats['reading_time'] ?? '';
             $dto->readingTime = $this->durationParser->parseDuration($readingTime);
             
-            $dto->publishedAt = new \DateTime($item['publication_date'] ?? 'now');
+            $publicationDate = $item['publication_date'] ?? null;
+            if (empty($publicationDate)) {
+                throw new \InvalidArgumentException('Publication date is required');
+            }
+            $dto->publishedAt = new \DateTime($publicationDate);
             
             $categories = $item['categories']['category'] ?? [];
             if (is_string($categories)) {
                 $dto->tags = [$categories];
             } else {
-                $dto->tags = $categories;
+                $dto->tags = is_array($categories) ? $categories : [];
             }
             
-            $dtos[] = $dto;
+            return $dto;
+            
+        } catch (\Throwable $e) {
+            throw ProviderNormalizeException::create(
+                providerName: $this->getName(),
+                message: sprintf('Failed to normalize item: %s', $e->getMessage()),
+                contentId: $contentId,
+                invalidData: $item,
+                previous: $e
+            );
         }
-        
-        return $dtos;
     }
 
     /**
@@ -107,4 +190,3 @@ class Provider2Xml extends BaseProvider
         return 'provider_2_xml';
     }
 }
-

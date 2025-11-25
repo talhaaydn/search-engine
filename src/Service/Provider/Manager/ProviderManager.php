@@ -3,7 +3,9 @@
 namespace App\Service\Provider\Manager;
 
 use App\DTO\ContentDTO;
+use App\Exception\Provider\ProviderException;
 use App\Service\Provider\Interface\ProviderInterface;
+use Psr\Log\LoggerInterface;
 
 class ProviderManager
 {
@@ -11,7 +13,8 @@ class ProviderManager
      * @param iterable<ProviderInterface> $providers
      */
     public function __construct(
-        private iterable $providers
+        private iterable $providers,
+        private LoggerInterface $logger
     ) {
     }
 
@@ -23,13 +26,77 @@ class ProviderManager
         $contents = [];
 
         foreach ($this->providers as $provider) {
+            $dtos = $this->processProvider($provider);
+
+            if ($dtos) {
+                $contents = array_merge($contents, $dtos);
+            }
+        }
+        
+        return $contents;
+    }
+
+    /**
+     * @param ProviderInterface $provider
+     * @return ContentDTO[]|null
+     */
+    private function processProvider(ProviderInterface $provider): ?array
+    {        
+        $this->logger->info('Provider starting', [
+            'provider' => $provider->getName(),
+        ]);
+
+        try {
             $raw = $provider->fetch();
             $dtos = $provider->normalize($raw);
-            
-            $contents = array_merge($contents, $dtos);
+
+            $this->logger->info('Provider completed successfully', [
+                'provider' => $provider->getName(),
+                'content_count' => count($dtos)
+            ]);
+
+            return $dtos;
+
+        } catch (ProviderException $e) {
+            $this->logProviderException($provider->getName(), $e);
+
+        } catch (\Throwable $e) {
+            $this->logUnexpectedException($provider->getName(), $e);
         }
 
-        return $contents;
+        return null;
+    }
+
+    /**
+     * @param string $providerName
+     * @param ProviderException $e
+     */
+    private function logProviderException(string $providerName, ProviderException $e): void
+    {
+        $this->logger->error('Provider error', array_merge(
+            $e->getContext(),
+            [
+                'provider' => $providerName,
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]
+        ));
+    }
+
+    /**
+     * @param string $providerName
+     * @param \Throwable $e
+     */
+    private function logUnexpectedException(string $providerName, \Throwable $e): void
+    {
+        $this->logger->critical('Unexpected provider error', [
+            'provider' => $providerName,
+            'exception' => get_class($e),
+            'message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => $e->getTraceAsString(),
+        ]);
     }
 }
 
