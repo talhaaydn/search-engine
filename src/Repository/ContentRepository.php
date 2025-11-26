@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use App\DTO\Content\ContentSearchRequestDTO;
 use App\Entity\Content;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
@@ -79,6 +80,47 @@ class ContentRepository extends ServiceEntityRepository
 
         $em->flush();
         $em->clear();
+    }
+
+    /**
+     * @return array{contents: Content[], total: int}
+     */
+    public function searchContents(ContentSearchRequestDTO $request): array
+    {
+        $baseQb = $this->createQueryBuilder('c');
+
+        if ($request->getKeyword() !== null && $request->getKeyword() !== '') {
+            $baseQb->andWhere('c.title LIKE :keyword')
+                   ->setParameter('keyword', '%' . $request->getKeyword() . '%');
+        }
+
+        if ($request->getContentType() !== null) {
+            $baseQb->andWhere('c.contentType = :contentType')
+                   ->setParameter('contentType', $request->getContentType()->value);
+        }
+
+        $countQb = clone $baseQb;
+        $total = (int) $countQb->select('COUNT(c.id)')
+                               ->getQuery()
+                               ->getSingleScalarResult();
+
+        $dataQb = clone $baseQb;
+
+        if ($request->getSortByScore() !== null) {
+            $dataQb->orderBy('c.score', $request->getSortByScore());
+        } else {
+            $dataQb->orderBy('c.id', 'DESC');
+        }
+
+        $dataQb->setFirstResult($request->getOffset())
+               ->setMaxResults($request->getLimit());
+
+        $contents = $dataQb->getQuery()->getResult();
+
+        return [
+            'contents' => $contents,
+            'total' => $total,
+        ];
     }
 }
 
