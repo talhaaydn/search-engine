@@ -39,7 +39,7 @@ Bu komut otomatik olarak:
 #### 5. Uygulamaya Erişin
 
 - **Web Uygulaması**: http://localhost:8080
-- **Search API Kullanımı**: http://localhost:8080/api/docs
+- **API Dokümanı**: http://localhost:8080/api/docs
 
 ---
 
@@ -109,8 +109,21 @@ docker compose exec php php bin/console app:import-content
 - **PHP**: 8.2
 - **Symfony**: 7.2
 - **PostgreSQL**: 16
+- **Elasticsearch**: 8.11
 - **Redis**: 7
 - **RabbitMQ**: 3.13
 - **Nginx**: Alpine
 - **Docker & Docker Compose**
+
+## Mimari Kararlar
+
+### Neden PostgreSQL?
+
+İlişkisel veri saklama ihtiyacı için MySQL ve PostgreSQL arasında değerlendirme yapıldı. Bu proje kapsamında MySQL'in sunduğu özellikler yeterli olsa da, projenin ölçeklenebilirliği ve gelecekteki büyüme potansiyeli göz önünde bulundurularak PostgreSQL tercih edildi.
+
+### Neden Elasticsearch?
+
+PostgreSQL güçlü bir veritabanı olmasına rağmen, büyük ölçekli projelerde full-text search işlemlerinde gerekli performansı sağlamakta yetersiz kalabilir. Bu nedenle, arama işlemlerini optimize etmek amacıyla Elasticsearch entegre edildi.
+
+Elasticsearch, özellikle metin tabanlı aramalarda PostgreSQL'e göre çok daha yüksek performans sunar. PostgreSQL'deki her içerik değişikliği, event-driven mimari kullanılarak otomatik olarak Elasticsearch'e senkronize edilir ve böylece her iki sistemin avantajlarından yararlanılır.
 
