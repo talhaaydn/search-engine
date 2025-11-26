@@ -4,6 +4,7 @@ namespace App\Service\Provider\Manager;
 
 use App\DTO\ContentDTO;
 use App\Exception\Provider\ProviderException;
+use App\Exception\Provider\RateLimitExceededException;
 use App\Service\Provider\Interface\ProviderInterface;
 use Psr\Log\LoggerInterface;
 
@@ -57,6 +58,9 @@ class ProviderManager
 
             return $dtos;
 
+        } catch (RateLimitExceededException $e) {
+            $this->logRateLimitExceededException($provider->getName(), $e);
+
         } catch (ProviderException $e) {
             $this->logProviderException($provider->getName(), $e);
 
@@ -96,6 +100,18 @@ class ProviderManager
             'file' => $e->getFile(),
             'line' => $e->getLine(),
             'trace' => $e->getTraceAsString(),
+        ]);
+    }
+
+    /**
+     * @param string $providerName
+     * @param RateLimitExceededException $e
+     */
+    private function logRateLimitExceededException(string $providerName, RateLimitExceededException $e): void
+    {
+        $this->logger->warning('Provider rate limit exceeded', [
+            'provider' => $providerName,
+            'retry_after' => $e->getContext()['retry_after'] ?? 'unknown',
         ]);
     }
 }

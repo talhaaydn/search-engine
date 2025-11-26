@@ -4,21 +4,59 @@ namespace App\Service\Provider\Base;
 
 use App\Exception\Provider\ProviderFetchException;
 use App\Exception\Provider\ProviderParseException;
+use App\Exception\Provider\RateLimitExceededException;
 use App\Service\Provider\Interface\ProviderInterface;
+use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Contracts\HttpClient\Exception\HttpExceptionInterface;
 use Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface;
 
 abstract class BaseProvider implements ProviderInterface
 {
+    private ?RateLimiterFactory $rateLimiterFactory = null;
+    
+    public function setRateLimiter(RateLimiterFactory $rateLimiterFactory): void
+    {
+        $this->rateLimiterFactory = $rateLimiterFactory;
+    }
+
     /**
      * @return array
      * @throws ProviderFetchException
      * @throws ProviderParseException
+     * @throws RateLimitExceededException
      */
     public function fetch(): array
     {
+        $this->checkRateLimit();
+        
         $raw = $this->fetchWithErrorHandling();
         return $this->parseWithErrorHandling($raw);
+    }
+
+    /**
+     * @throws RateLimitExceededException
+     */
+    private function checkRateLimit(): void
+    {
+        if ($this->rateLimiterFactory === null) {
+            return;
+        }
+
+        $limiter = $this->rateLimiterFactory->create($this->getName());
+        $limit = $limiter->consume(1);
+
+        if (!$limit->isAccepted()) {
+            $retryAfter = null;
+            $retryAfterDate = $limit->getRetryAfter();
+            if ($retryAfterDate !== null) {
+                $retryAfter = $retryAfterDate->format('Y-m-d H:i:s');
+            }
+            
+            throw RateLimitExceededException::create(
+                providerName: $this->getName(),
+                retryAfter: $retryAfter
+            );
+        }
     }
 
     /**

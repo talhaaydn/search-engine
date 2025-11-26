@@ -8,6 +8,7 @@ namespace App\Exception\Provider;
 abstract class ProviderException extends \Exception
 {
     protected string $providerName;
+    protected array $context = [];
 
     public function __construct(
         string $message = "",
@@ -26,10 +27,10 @@ abstract class ProviderException extends \Exception
     
     public function getContext(): array
     {
-        return [
+        return array_merge([
             'provider' => $this->providerName,
             'code' => $this->getCode(),
-        ];
+        ], $this->context);
     }
 }
 

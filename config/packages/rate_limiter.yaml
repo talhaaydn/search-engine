@@ -1,0 +1,12 @@
+framework:
+    rate_limiter:
+        provider_1_json:
+            policy: 'sliding_window'
+            limit: 10
+            interval: '1 minute'
+
+        provider_2_xml:
+            policy: 'sliding_window'
+            limit: 10
+            interval: '1 minute'
+

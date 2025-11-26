@@ -21,11 +21,16 @@ services:
 
     App\Service\Provider\Implementation\Provider1Json:
         tags: ['app.content_provider']
+        calls:
+            - setRateLimiter: ['@limiter.provider_1_json']
 
     App\Service\Provider\Implementation\Provider2Xml:
         tags: ['app.content_provider']
+        calls:
+            - setRateLimiter: ['@limiter.provider_2_xml']
 
     # NOT: Yeni provider eklemek için:
     # 1. App\Service\Provider\Base\BaseProvider'ı extend eden yeni bir sınıf oluştur
     # 2. Implementation klasörüne yerleştir
     # 3. Bu dosyaya service definition ekle ve 'app.content_provider' tag'i ile etiketle
+    # 4. setRateLimiter call'u ekle
