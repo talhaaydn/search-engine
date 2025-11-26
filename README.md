@@ -127,3 +127,15 @@ PostgreSQL güçlü bir veritabanı olmasına rağmen, büyük ölçekli projele
 
 Elasticsearch, özellikle metin tabanlı aramalarda PostgreSQL'e göre çok daha yüksek performans sunar. PostgreSQL'deki her içerik değişikliği, event-driven mimari kullanılarak otomatik olarak Elasticsearch'e senkronize edilir ve böylece her iki sistemin avantajlarından yararlanılır.
 
+## Gelecek Geliştirmeler
+
+Proje kapsamında planlanan ancak zaman kısıtları nedeniyle henüz uygulanamamış özellikler:
+
+### Redis Cache Entegrasyonu
+
+Arama sorgularının performansını artırmak amacıyla Redis cache katmanı altyapıya dahil edildi. Ancak, cache stratejisinin belirlenmesi ve invalidation mekanizmalarının tasarlanması için ek geliştirme süresi gerektiğinden implementasyon tamamlanamadı.
+
+### Asenkron İçerik İşleme
+
+İçerik ekleme ve güncelleme işlemlerinin sistem performansını etkilememesi için RabbitMQ tabanlı asenkron işleme mimarisi planlandı. Message queue altyapısı hazır olmasına rağmen, consumer servislerinin geliştirilmesi ve hata yönetimi mekanizmalarının tasarlanması tamamlanamadı.
+
