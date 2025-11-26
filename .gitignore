@@ -10,6 +10,7 @@
 ###< symfony/framework-bundle ###
 
 .env
+.DS_Store
 ###> phpunit/phpunit ###
 /phpunit.xml
 .phpunit.result.cache
