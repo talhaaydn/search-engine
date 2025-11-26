@@ -13,8 +13,8 @@
 #### 1. Projeyi Klonlayın
 
 ```bash
-git clone <repository-url>
-cd search-engine-service
+git clone https://github.com/talhaaydn/search-engine.git
+cd search-engine
 ```
 
 #### 2. .env Dosyasını Oluşturun
