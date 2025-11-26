@@ -10,6 +10,13 @@ services:
             - '../src/Entity/'
             - '../src/Kernel.php'
 
+    App\Service\Elasticsearch\ElasticsearchService:
+        arguments:
+            $elasticsearchHost: '%env(ELASTICSEARCH_HOST)%'
+            $elasticsearchPort: '%env(int:ELASTICSEARCH_PORT)%'
+            $indexName: 'search_engine_content'
+            $logger: '@logger'
+
     App\Service\Provider\Manager\ProviderManager:
         arguments:
             $providers: !tagged_iterator app.content_provider

@@ -14,12 +14,16 @@ services:
       APP_ENV: ${APP_ENV:-dev}
       APP_SECRET: ${APP_SECRET:-changeme}
       DATABASE_URL: ${DATABASE_URL}
+      ELASTICSEARCH_HOST: ${ELASTICSEARCH_HOST:-elasticsearch}
+      ELASTICSEARCH_PORT: ${ELASTICSEARCH_PORT:-9200}
     depends_on:
       database:
         condition: service_healthy
       redis:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      elasticsearch:
         condition: service_healthy
     networks:
       - search_engine_network
@@ -103,6 +107,30 @@ services:
       - search_engine_network
 ###< rabbitmq ###
 
+###> elasticsearch ###
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTICSEARCH_VERSION:-8.11.0}
+    container_name: search_engine_elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - search_engine_network
+###< elasticsearch ###
+
 networks:
   search_engine_network:
     driver: bridge
@@ -117,3 +145,6 @@ volumes:
 ###> rabbitmq ###
   rabbitmq_data:
 ###< rabbitmq ###
+###> elasticsearch ###
+  elasticsearch_data:
+###< elasticsearch ###

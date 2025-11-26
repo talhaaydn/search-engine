@@ -6,27 +6,27 @@ use App\DTO\Content\ContentSearchRequestDTO;
 use App\DTO\Content\ContentSearchResponseItemDTO;
 use App\DTO\Pagination\PaginationMetaDTO;
 use App\DTO\Pagination\PaginationResponseDTO;
-use App\Repository\ContentRepository;
+use App\Repository\ElasticsearchContentRepository;
 
 class ContentService
 {
     public function __construct(
-        private readonly ContentRepository $contentRepository
+        private readonly ElasticsearchContentRepository $elasticsearchContentRepository
     ) {
     }
 
     public function search(ContentSearchRequestDTO $request): PaginationResponseDTO
     {
-        ['contents' => $contents, 'total' => $total] = $this->contentRepository->searchContents($request);
+        ['results' => $results, 'total' => $total] = $this->elasticsearchContentRepository->search($request);
 
         $data = [];
-        foreach ($contents as $content) {
+        foreach ($results as $contentDocument) {
             $data[] = new ContentSearchResponseItemDTO(
-                $content->getId(),
-                $content->getTitle(),
-                $content->getContentType(),
-                $content->getScore(),
-                $content->getCreatedAt(),
+                $contentDocument->id,
+                $contentDocument->title,
+                $contentDocument->contentType,
+                $contentDocument->score,
+                $contentDocument->createdAt,
             );
         }
 
@@ -39,4 +39,5 @@ class ContentService
         return new PaginationResponseDTO($data, $meta);
     }
 }
+
 
