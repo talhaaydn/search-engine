@@ -15,6 +15,10 @@ services:
             $providers: !tagged_iterator app.content_provider
             $logger: '@monolog.logger.provider'
 
+    App\Command\ImportContentCommand:
+        arguments:
+            $logger: '@monolog.logger.provider'
+
     App\Service\Provider\Implementation\Provider1Json:
         tags: ['app.content_provider']
 
