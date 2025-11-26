@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Controller;
+namespace App\Controller\Api;
 
 use App\DTO\Content\ContentSearchRequestDTO;
 use App\DTO\Content\ContentSearchResponseItemDTO;
@@ -10,6 +10,7 @@ use Nelmio\ApiDocBundle\Attribute\Model;
 use OpenApi\Attributes as OA;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapQueryString;
 use Symfony\Component\Routing\Annotation\Route;
 
@@ -18,6 +19,12 @@ class ContentController extends AbstractController
     public function __construct(
         private readonly ContentService $contentService
     ) {
+    }
+
+    #[Route('/', name: 'home', methods: ['GET'])]
+    public function home(): Response
+    {
+        return $this->render('content/search.html.twig');
     }
 
     #[Route('/api/contents', name: 'content_index', methods: ['GET'])]

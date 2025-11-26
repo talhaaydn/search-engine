@@ -1,0 +1,286 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}İçerik Arama{% endblock %}
+
+{% block stylesheets %}
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    .spinner {
+        animation: spin 1s linear infinite;
+    }
+</style>
+{% endblock %}
+
+{% block javascripts %}
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+{% endblock %}
+
+{% block body %}
+<div class="min-h-screen bg-gradient-to-br from-indigo-500 via-purple-500 to-purple-600 p-8" x-data="searchApp()">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="text-center text-white mb-12">
+            <h1 class="text-5xl font-bold mb-2">🔍 İçerik Arama Motoru</h1>
+            <p class="text-xl opacity-90">Video ve makaleler arasında arama yapın</p>
+        </div>
+
+        <!-- Search Card -->
+        <div class="bg-white rounded-2xl shadow-2xl p-8 mb-8">
+            <form @submit.prevent="search" class="space-y-6">
+                <!-- Keyword Input -->
+                <div class="flex flex-col gap-2">
+                    <label for="keyword" class="font-semibold text-gray-700 text-sm">Arama Kelimesi</label>
+                    <input 
+                        type="text" 
+                        id="keyword" 
+                        x-model="filters.keyword"
+                        placeholder="Aramak istediğiniz kelimeyi girin..."
+                        minlength="2"
+                        class="px-4 py-3 border-2 border-gray-200 rounded-lg text-base transition-all focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 outline-none"
+                    >
+                </div>
+
+                <!-- Filters Row -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="flex flex-col gap-2">
+                        <label for="contentType" class="font-semibold text-gray-700 text-sm">İçerik Türü</label>
+                        <select 
+                            id="contentType" 
+                            x-model="filters.contentType"
+                            class="px-4 py-3 border-2 border-gray-200 rounded-lg text-base transition-all focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 outline-none"
+                        >
+                            <option value="">Tümü</option>
+                            <option value="video">Video</option>
+                            <option value="article">Makale</option>
+                        </select>
+                    </div>
+
+                    <div class="flex flex-col gap-2">
+                        <label for="sortByScore" class="font-semibold text-gray-700 text-sm">Sıralama</label>
+                        <select 
+                            id="sortByScore" 
+                            x-model="filters.sortByScore"
+                            class="px-4 py-3 border-2 border-gray-200 rounded-lg text-base transition-all focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 outline-none"
+                        >
+                            <option value="">Varsayılan</option>
+                            <option value="desc">Yüksek Puan → Düşük</option>
+                            <option value="asc">Düşük Puan → Yüksek</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Search Button -->
+                <button 
+                    type="submit" 
+                    :disabled="loading"
+                    class="w-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold py-4 px-8 rounded-lg text-base transition-all hover:shadow-xl hover:-translate-y-1 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+                >
+                    <span x-show="!loading">🔎 Ara</span>
+                    <span x-show="loading">⏳ Aranıyor...</span>
+                </button>
+            </form>
+        </div>
+
+        <!-- Results Card -->
+        <div x-show="searched" class="bg-white rounded-2xl shadow-2xl p-8">
+            <!-- Error Message -->
+            <div x-show="error" class="bg-red-100 text-red-800 p-4 rounded-lg mb-4" x-text="error"></div>
+
+            <!-- Loading State -->
+            <div x-show="loading" class="text-center py-12 text-gray-500">
+                <div class="w-10 h-10 border-4 border-gray-200 border-t-indigo-500 rounded-full spinner mx-auto mb-4"></div>
+                <p>Sonuçlar yükleniyor...</p>
+            </div>
+
+            <!-- Results Table -->
+            <template x-if="!loading && results.length > 0">
+                <div>
+                    <!-- Results Header -->
+                    <div class="flex justify-between items-center mb-6 pb-4 border-b-2 border-gray-200">
+                        <h2 class="text-2xl font-bold text-gray-800">Arama Sonuçları</h2>
+                        <div class="bg-indigo-500 text-white px-4 py-2 rounded-full font-semibold text-sm" x-text="`${meta.total} sonuç`"></div>
+                    </div>
+
+                    <!-- Table -->
+                    <div class="overflow-x-auto">
+                        <table class="w-full border-collapse">
+                            <thead>
+                                <tr class="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
+                                    <th class="px-4 py-4 text-left font-semibold text-sm uppercase tracking-wide rounded-tl-lg">ID</th>
+                                    <th class="px-4 py-4 text-left font-semibold text-sm uppercase tracking-wide">Başlık</th>
+                                    <th class="px-4 py-4 text-left font-semibold text-sm uppercase tracking-wide">Tür</th>
+                                    <th class="px-4 py-4 text-left font-semibold text-sm uppercase tracking-wide">Puan</th>
+                                    <th class="px-4 py-4 text-left font-semibold text-sm uppercase tracking-wide rounded-tr-lg">Tarih</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="item in results" :key="item.id">
+                                    <tr class="border-b border-gray-200 hover:bg-gray-50 transition-all hover:scale-[1.01] hover:shadow-md">
+                                        <td class="px-4 py-5 text-gray-500 font-semibold text-sm" x-text="'#' + item.id"></td>
+                                        <td class="px-4 py-5 text-gray-800 font-semibold" x-text="item.title"></td>
+                                        <td class="px-4 py-5">
+                                            <span 
+                                                class="inline-block px-3 py-1.5 rounded-xl text-xs font-semibold uppercase"
+                                                :class="item.contentType === 'video' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'"
+                                                x-text="item.contentType === 'video' ? '📹 Video' : '📄 Makale'"
+                                            ></span>
+                                        </td>
+                                        <td class="px-4 py-5 text-indigo-600 font-bold text-lg" x-text="item.score.toFixed(2)"></td>
+                                        <td class="px-4 py-5 text-gray-500 text-sm" x-text="formatDate(item.createdAt)"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination -->
+                    <div x-show="meta.totalPages > 1" class="flex justify-center items-center gap-4 mt-8 pt-8 border-t-2 border-gray-200">
+                        <button 
+                            @click="goToPage(filters.page - 1)"
+                            :disabled="filters.page <= 1"
+                            class="px-4 py-2 border-2 border-indigo-500 bg-white text-indigo-500 rounded-lg font-semibold transition-all hover:bg-indigo-500 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-indigo-500"
+                        >
+                            ← Önceki
+                        </button>
+                        <span class="text-gray-500 font-medium">
+                            Sayfa <strong x-text="filters.page" class="text-gray-800"></strong> / <strong x-text="meta.totalPages" class="text-gray-800"></strong>
+                        </span>
+                        <button 
+                            @click="goToPage(filters.page + 1)"
+                            :disabled="filters.page >= meta.totalPages"
+                            class="px-4 py-2 border-2 border-indigo-500 bg-white text-indigo-500 rounded-lg font-semibold transition-all hover:bg-indigo-500 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-indigo-500"
+                        >
+                            Sonraki →
+                        </button>
+                    </div>
+                </div>
+            </template>
+
+            <!-- Empty State -->
+            <div x-show="!loading && results.length === 0 && searched" class="text-center py-12 text-gray-500">
+                <svg class="w-20 h-20 mx-auto mb-4 opacity-50" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <h3 class="text-xl font-semibold mb-2">Sonuç bulunamadı</h3>
+                <p>Arama kriterlerinize uygun içerik bulunamadı. Lütfen farklı bir arama deneyin.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function searchApp() {
+        return {
+            filters: {
+                keyword: '',
+                contentType: '',
+                sortByScore: '',
+                page: 1,
+                limit: 4
+            },
+            results: [],
+            meta: {
+                total: 0,
+                totalPages: 0,
+                currentPage: 1,
+                perPage: 4
+            },
+            loading: false,
+            searched: false,
+            error: null,
+
+            async search() {
+                this.loading = true;
+                this.error = null;
+                this.searched = true;
+                this.filters.page = 1;
+
+                try {
+                    const params = new URLSearchParams();
+                    
+                    if (this.filters.keyword) {
+                        params.append('keyword', this.filters.keyword);
+                    }
+                    if (this.filters.contentType) {
+                        params.append('contentType', this.filters.contentType);
+                    }
+                    if (this.filters.sortByScore) {
+                        params.append('sortByScore', this.filters.sortByScore);
+                    }
+                    params.append('page', this.filters.page);
+                    params.append('limit', this.filters.limit);
+
+                    const response = await fetch(`/api/contents?${params.toString()}`);
+                    
+                    if (!response.ok) {
+                        throw new Error('Arama sırasında bir hata oluştu');
+                    }
+
+                    const data = await response.json();
+                    this.results = data.data || [];
+                    this.meta = data.meta || this.meta;
+                } catch (err) {
+                    this.error = err.message;
+                    this.results = [];
+                } finally {
+                    this.loading = false;
+                }
+            },
+
+            async goToPage(page) {
+                if (page < 1 || page > this.meta.totalPages) {
+                    return;
+                }
+
+                this.filters.page = page;
+                this.loading = true;
+                this.error = null;
+
+                try {
+                    const params = new URLSearchParams();
+                    
+                    if (this.filters.keyword) {
+                        params.append('keyword', this.filters.keyword);
+                    }
+                    if (this.filters.contentType) {
+                        params.append('contentType', this.filters.contentType);
+                    }
+                    if (this.filters.sortByScore) {
+                        params.append('sortByScore', this.filters.sortByScore);
+                    }
+                    params.append('page', this.filters.page);
+                    params.append('limit', this.filters.limit);
+
+                    const response = await fetch(`/api/contents?${params.toString()}`);
+                    
+                    if (!response.ok) {
+                        throw new Error('Sayfa yüklenirken bir hata oluştu');
+                    }
+
+                    const data = await response.json();
+                    this.results = data.data || [];
+                    this.meta = data.meta || this.meta;
+                } catch (err) {
+                    this.error = err.message;
+                } finally {
+                    this.loading = false;
+                }
+            },
+
+            formatDate(dateString) {
+                const date = new Date(dateString);
+                return date.toLocaleDateString('tr-TR', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+            }
+        }
+    }
+</script>
+{% endblock %}
+
